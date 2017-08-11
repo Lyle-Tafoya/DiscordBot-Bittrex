@@ -1,0 +1,73 @@
+#!/usr/bin/env ruby
+
+require 'discordrb'
+require 'excon'
+require 'json'
+
+bot = Discordrb::Bot.new(token: 'MzQ1MDU0NjU4NzczMTIzMDcz.DG11Iw.i5zPUW4fxKFluwwAmN7bV2G2-gk', client_id: '345054658773123073')
+
+@cache = {}
+@long_names = {}
+
+# Build a map of coin abbreviations to full/long names
+response = Excon.get('https://bittrex.com/api/v1.1/public/getmarkets')
+json = JSON.parse(response.body)
+json['result'].each {|market_info| @long_names[market_info['MarketCurrency']] = market_info['MarketCurrencyLong'] }
+
+# Retrieve the specified coin's value and change percentage (over last 24 hours) in BTC
+def get_coin_data(coin_abbr)
+  coin_abbr.downcase!()
+  if !@cache.key?(coin_abbr) || Time.now().to_i()-@cache[coin_abbr]['timestamp'] > 60
+    response = Excon.get("https://bittrex.com/api/v1.1/public/getmarketsummary?market=btc-%s" % coin_abbr)
+    json = JSON.parse(response.body)
+    return unless json['success'] == true
+    current_value = json['result'].first['Last']
+    @cache[coin_abbr] = {
+      'value_in_btc' => current_value,
+      'change' => (current_value/json['result'].first['PrevDay']-1)*100,
+      'timestamp' => Time.now().to_i()
+    }
+  end
+  return @cache[coin_abbr]
+end
+
+# Retrieve BTC value in USD
+def get_btc_value_in_usd()
+  if !@cache.key?('btc') || Time.now().to_i()-@cache['btc']['timestamp'] > 60
+    response = Excon.get('https://bittrex.com/Api/v2.0/pub/currencies/GetBTCPrice')
+    json = JSON.parse(response.body)
+    return unless json['success'] == true
+    @cache['btc'] = {
+      'value_in_usd'=>json['result']['bpi']['USD']['rate_float'],
+      'timestamp'=>Time.now().to_i()
+    }
+  end
+  return @cache['btc']['value_in_usd']
+end
+
+bot.message(start_with: 'b ') do |event|
+  # Handle multiple parameters
+  event.message.content.split.each_with_index do |coin, i|
+    next if i == 0
+    next unless @long_names.key?(coin.upcase())
+
+    # BTC is a special case
+    if coin.downcase() == 'btc'
+      value_in_usd = get_btc_value_in_usd()
+      event.respond("**BITTREX** %s | Price: `$%.2f`" % [@long_names[coin.upcase()], value_in_usd])
+      next
+    end
+
+    # Use "threading" to save time in case we have to do 2 HTTP GETs
+    threads = []
+    threads[0] = Thread.new { @btc_value_in_usd = get_btc_value_in_usd() }
+    threads[1] = Thread.new { @coin_data = get_coin_data(coin) }
+    threads.each {|t| t.join() }
+
+    value_in_btc = @coin_data['value_in_btc']
+    value_in_usd = value_in_btc * @btc_value_in_usd
+    event.respond("**BITTREX** %s | Price: `%f BTC`/`$%.2f` Change: `%.2f%%`" % [@long_names[coin.upcase()], value_in_btc, value_in_usd, @coin_data['change']])
+  end
+end
+
+bot.run
