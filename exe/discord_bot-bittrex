@@ -4,7 +4,7 @@ require 'discordrb'
 require 'excon'
 require 'json'
 
-bot = Discordrb::Bot.new(token: 'MzQ1MDU0NjU4NzczMTIzMDcz.DG11Iw.i5zPUW4fxKFluwwAmN7bV2G2-gk', client_id: '345054658773123073')
+bot = Discordrb::Bot.new(token: '', client_id: '')
 
 @cache = {}
 @long_names = {}
