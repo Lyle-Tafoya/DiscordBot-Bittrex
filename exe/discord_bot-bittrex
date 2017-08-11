@@ -3,8 +3,14 @@
 require 'discordrb'
 require 'excon'
 require 'json'
+require 'trollop'
 
-bot = Discordrb::Bot.new(token: '', client_id: '')
+opts = Trollop::options do
+  opt :token, 'Authentication token for bot', :type => :string, :required => true
+  opt :client_id, 'Client Id for the app', :type => :string, :required => true
+end
+
+bot = Discordrb::Bot.new(token: opts[:token], client_id: opts[:client_id])
 
 @cache = {}
 @long_names = {}
