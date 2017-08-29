@@ -53,7 +53,7 @@ end
 
 bot.message(start_with: 'b ') do |event|
   # Handle multiple parameters
-  event.message.content.split.each_with_index do |coin, i|
+  event.message.content.split.uniq.each_with_index do |coin, i|
     next if i == 0
     next unless @long_names.key?(coin.upcase())
 
