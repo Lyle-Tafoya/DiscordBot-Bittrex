@@ -52,28 +52,34 @@ def get_btc_value_in_usd()
 end
 
 bot.message(start_with: 'b ') do |event|
+  threads = []
+  responses = []
   # Handle multiple parameters
   event.message.content.split.uniq.each_with_index do |coin, i|
-    next if i == 0
-    next unless @long_names.key?(coin.upcase())
+    threads.push Thread.new {
+      next if i == 0
+      next unless @long_names.key?(coin.upcase())
 
-    # BTC is a special case
-    if coin.downcase() == 'btc'
-      value_in_usd = get_btc_value_in_usd()
-      event.respond("**BITTREX** %s | Price: `$%.2f`" % [@long_names[coin.upcase()], value_in_usd])
-      next
-    end
+      # BTC is a special case
+      if coin.downcase() == 'btc'
+        value_in_usd = get_btc_value_in_usd()
+        responses.push("**BITTREX** %s | Price: `$%.2f`" % [@long_names[coin.upcase()], value_in_usd])
+        next
+      end
 
-    # Use "threading" to save time in case we have to do 2 HTTP GETs
-    threads = []
-    threads[0] = Thread.new { @btc_value_in_usd = get_btc_value_in_usd() }
-    threads[1] = Thread.new { @coin_data = get_coin_data(coin) }
-    threads.each {|t| t.join() }
+      # Use "threading" to save time in case we have to do 2 HTTP GETs
+      sub_threads = []
+      sub_threads[0] = Thread.new { @btc_value_in_usd = get_btc_value_in_usd() }
+      sub_threads[1] = Thread.new { @coin_data = get_coin_data(coin) }
+      sub_threads.each {|t| t.join() }
 
-    value_in_btc = @coin_data['value_in_btc']
-    value_in_usd = value_in_btc * @btc_value_in_usd
-    event.respond("**BITTREX** %s | Price: `%f BTC`/`$%.2f` Change: `%.2f%%`" % [@long_names[coin.upcase()], value_in_btc, value_in_usd, @coin_data['change']])
+      value_in_btc = @coin_data['value_in_btc']
+      value_in_usd = value_in_btc * @btc_value_in_usd
+      responses.push("**BITTREX** %s | Price: `%f BTC`/`$%.2f` Change: `%.2f%%`" % [@long_names[coin.upcase()], value_in_btc, value_in_usd, @coin_data['change']])
+    }
   end
+  threads.each {|t| t.join() }
+  event.respond(responses.join("\n"))
 end
 
 bot.run
